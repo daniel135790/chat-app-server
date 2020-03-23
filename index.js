@@ -1,15 +1,31 @@
-const ws = require("ws");
+const ws = require('ws');
+const { v4: uuidv4 } = require('uuid');
 const wss = new ws.Server({port: 8080});
 
 const clients = new Set();
 
+const attachMessageId = (rawMessage) => {
+    const parsedMessage = JSON.parse(rawMessage);
+    const messageUuid = uuidv4();
+
+    const targetMessage = {
+        id: messageUuid,
+        ...parsedMessage
+    };
+
+    return targetMessage;
+};
+
 const onConnect = (ws) => {
     clients.add(ws);
-    console.log(ws);
+    console.log("New client: " + ws);
 
     ws.on('message', (message) => {
         console.log(message);
-        clients.forEach(client => client.send(message));
+        const targetMessage = attachMessageId(message);
+        const targetMessageString = JSON.stringify(targetMessage);
+        
+        clients.forEach(client => client.send(targetMessageString));
     });
 
     ws.on('close', () => {
