@@ -1,5 +1,5 @@
 const ws = require('ws');
-const { v4: uuidv4 } = require('uuid');
+const {v4: uuidv4} = require('uuid');
 const wss = new ws.Server({port: 8080});
 
 const clients = new Set();
@@ -24,8 +24,10 @@ const onConnect = (ws) => {
         console.log(message);
         const targetMessage = attachMessageId(message);
         const targetMessageString = JSON.stringify(targetMessage);
-        
-        clients.forEach(client => client.send(targetMessageString));
+
+        [...clients]
+            .filter(client => client !== ws)
+            .forEach(client => client.send(targetMessageString));
     });
 
     ws.on('close', () => {
