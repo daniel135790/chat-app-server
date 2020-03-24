@@ -15,5 +15,9 @@
   "bugs": {
     "url": "https://github.com/daniel135790/chat-app-server/issues"
   },
-  "homepage": "https://github.com/daniel135790/chat-app-server#readme"
+  "homepage": "https://github.com/daniel135790/chat-app-server#readme",
+  "dependencies": {
+    "uuid": "^7.0.2",
+    "ws": "^7.2.3"
+  }
 }
