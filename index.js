@@ -1,6 +1,8 @@
 const ws = require('ws');
 const {v4: uuidv4} = require('uuid');
-const wss = new ws.Server({port: 8080});
+
+const PORT = process.env.PORT || 8080;
+const wss = new ws.Server({port: PORT});
 
 const clients = new Set();
 
