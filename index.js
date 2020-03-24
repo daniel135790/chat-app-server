@@ -1,8 +1,14 @@
 const ws = require('ws');
+const express = require('express');
 const {v4: uuidv4} = require('uuid');
 
 const PORT = process.env.PORT || 8080;
-const wss = new ws.Server({port: PORT});
+
+const server = express()
+  .use((req, res) => res.send('Hello World'))
+  .listen(PORT, () => console.log(`Listening on ${PORT}`));
+
+const wss = new ws.Server({server});
 
 const clients = new Set();
 
