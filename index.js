@@ -1,5 +1,6 @@
 const ws = require('ws');
 const express = require('express');
+const utils = require('./utils');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = process.env.PORT || 8080;
@@ -23,10 +24,14 @@ const attachMessageId = (parsedMessage) => {
     return targetMessage;
 };
 
+const getActiveUsers = () => [...clients]
+    .map(utils.formatClient);
+
+
 const onConnect = (ws) => {
 
     let currentClient = null;
-
+    
     const broadcastMessage = (message) => {
         [...clients]
             .filter(client => client.socket !== ws)
@@ -34,6 +39,10 @@ const onConnect = (ws) => {
     };
 
     console.log("New client: " + ws);
+    ws.send(JSON.stringify({
+        type: 'users-list',
+        users: getActiveUsers()
+    }));
 
     ws.on('message', (rawMessage) => {
         const parsedMessage = JSON.parse(rawMessage);
@@ -50,15 +59,26 @@ const onConnect = (ws) => {
                 currentClient = {
                     username,
                     socket: ws,
-                    userId
+                    userId,
+                    status: 'online'
                 };
 
                 clients.add(currentClient);
+                const currentUserToPublish = utils.formatClient(currentClient);
 
                 broadcastMessage(JSON.stringify({
                     type: 'user-joined',
-                    userId: currentClient.userId,
-                    username,
+                    ...currentUserToPublish
+                }));
+
+                break;
+            case 'user-status-change':
+                const { status } = parsedMessage;
+                currentClient.status = status;
+
+                broadcastMessage(JSON.stringify({
+                    type: 'user-status-change',
+                    ...utils.formatClient(currentClient)
                 }));
 
                 break;
@@ -78,7 +98,6 @@ const onConnect = (ws) => {
         }));
 
         clients.delete(currentClient);
-
     })
 };
 
