@@ -1,17 +1,17 @@
 const ws = require('ws');
 const express = require('express');
+const cors = require('cors');
 const utils = require('./utils');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = process.env.PORT || 8080;
-
-const server = express()
-    .use((req, res) => res.send('Hello World'))
-    .listen(PORT, () => console.log(`Listening on ${PORT}`));
-
-const wss = new ws.Server({ server });
-
 const clients = new Set();
+
+const app = express();
+app.use(cors());
+
+const server = app.listen(PORT, () => console.log(`Listening on ${PORT}`));
+const wss = new ws.Server({ server });
 
 const attachMessageId = (parsedMessage) => {
     const messageUuid = uuidv4();
@@ -27,11 +27,21 @@ const attachMessageId = (parsedMessage) => {
 const getActiveUsers = () => [...clients]
     .map(utils.formatClient);
 
+const getClient = username => [...clients].find(client => client.username === username);
+
+const getUser = (username) => {
+    const client = getClient(username);
+
+    if (client) {
+        return utils.formatClient(client);
+    }
+
+    return null
+};
 
 const onConnect = (ws) => {
-
     let currentClient = null;
-    
+
     const broadcastMessage = (message) => {
         [...clients]
             .filter(client => client.socket !== ws)
@@ -55,18 +65,29 @@ const onConnect = (ws) => {
                 broadcastMessage(targetMessageString);
                 break;
             case 'user-connect':
-                userId = uuidv4();
-                currentClient = {
-                    username,
-                    socket: ws,
-                    userId,
-                    status: 'online'
-                };
+                const existingClient = getClient(username);
+                let broadcastMessageType;
 
-                clients.add(currentClient);
+                if (!existingClient) {
+                    userId = uuidv4();
+                    currentClient = {
+                        username,
+                        userId,
+                    };
+
+                    clients.add(currentClient);
+                    broadcastMessageType = 'user-joined';
+                }
+                else {
+                    currentClient = getClient(username);
+                    broadcastMessageType = 'user-status-change';
+                }
+
+                currentClient.socket = ws;
+                currentClient.status = 'online'
 
                 broadcastMessage(JSON.stringify({
-                    type: 'user-joined',
+                    type: broadcastMessageType,
                     ...utils.formatClient(currentClient)
                 }));
 
@@ -88,16 +109,28 @@ const onConnect = (ws) => {
 
     ws.on('close', () => {
         console.log(ws + ' closed');
-        const { userId, username } = currentClient;
+        currentClient.status = 'offline';
 
         broadcastMessage(JSON.stringify({
-            type: 'user-left',
-            userId,
-            username
+            type: 'user-status-change',
+            status: 'offline',
+            ...utils.formatClient(currentClient)
         }));
-
-        clients.delete(currentClient);
     })
 };
 
 wss.on('connection', onConnect);
+
+
+app.get('/users', (req, res) => res.send([...clients].map(utils.formatClient)));
+
+app.get('/user/:username', (req, res) => {
+    const user = getUser(req.params.username);
+
+    if (user) {
+        res.send(user);
+    }
+    else {
+        res.status(404).send('User not found');
+    }
+});
