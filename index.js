@@ -64,11 +64,10 @@ const onConnect = (ws) => {
                 };
 
                 clients.add(currentClient);
-                const currentUserToPublish = utils.formatClient(currentClient);
 
                 broadcastMessage(JSON.stringify({
                     type: 'user-joined',
-                    ...currentUserToPublish
+                    ...utils.formatClient(currentClient)
                 }));
 
                 break;
