@@ -2,10 +2,11 @@ const ws = require('ws');
 const express = require('express');
 const cors = require('cors');
 const utils = require('./utils');
-const { v4: uuidv4 } = require('uuid');
+
+const ClientHandler = require('./ClientHandler');
 
 const PORT = process.env.PORT || 8080;
-const clients = new Set();
+const clients = {};
 
 const app = express();
 app.use(cors());
@@ -13,122 +14,63 @@ app.use(cors());
 const server = app.listen(PORT, () => console.log(`Listening on ${PORT}`));
 const wss = new ws.Server({ server });
 
-const attachMessageId = (parsedMessage) => {
-    const messageUuid = uuidv4();
-
-    const targetMessage = {
-        id: messageUuid,
-        ...parsedMessage
-    };
-
-    return targetMessage;
-};
-
-const getActiveUsers = () => [...clients]
-    .map(utils.formatClient);
-
-const getClient = username => [...clients].find(client => client.username === username);
-
-const getUser = (username) => {
-    const client = getClient(username);
-
-    if (client) {
-        return utils.formatClient(client);
-    }
-
-    return null
-};
-
 const onConnect = (ws) => {
-    let currentClient = null;
-
-    const broadcastMessage = (message) => {
-        [...clients]
-            .filter(client => client.socket !== ws)
-            .forEach(client => client.socket.send(message));
-    };
+    const clientHandler = new ClientHandler(ws);
 
     console.log("New client: " + ws);
-    ws.send(JSON.stringify({
-        type: 'users-list',
-        users: getActiveUsers()
-    }));
 
-    ws.on('message', (rawMessage) => {
-        const parsedMessage = JSON.parse(rawMessage);
-        const username = parsedMessage.username;
+    const broadcastMessage = (message) => {
+        cObject.entries(clients)
+            .filter(([username, handler]) => handler.isAvailable && username !== clientHandler.user.username)
+            .forEach(([, handler]) => handler.send(message));
+    };
 
-        switch (parsedMessage.type) {
-            case 'message':
-                const targetMessage = attachMessageId(parsedMessage);
-                const targetMessageString = JSON.stringify(targetMessage);
-                broadcastMessage(targetMessageString);
-                break;
-            case 'user-connect':
-                const existingClient = getClient(username);
-                let broadcastMessageType;
+    clientHandler.on('received-username', (username) => {
+        let broadcastMessageType;
 
-                if (!existingClient) {
-                    userId = uuidv4();
-                    currentClient = {
-                        username,
-                        userId,
-                    };
+        if (clients[username]) {
+            broadcastMessageType = 'user-status-change';
 
-                    clients.add(currentClient);
-                    broadcastMessageType = 'user-joined';
-                }
-                else {
-                    currentClient = getClient(username);
-                    broadcastMessageType = 'user-status-change';
-                }
-
-                currentClient.socket = ws;
-                currentClient.status = 'online'
-
-                broadcastMessage(JSON.stringify({
-                    type: broadcastMessageType,
-                    ...utils.formatClient(currentClient)
-                }));
-
-                break;
-            case 'user-status-change':
-                const { status } = parsedMessage;
-                currentClient.status = status;
-
-                broadcastMessage(JSON.stringify({
-                    type: 'user-status-change',
-                    ...utils.formatClient(currentClient)
-                }));
-
-                break;
-            default:
-                break;
+        } else {
+            broadcastMessageType = 'user-joined';
         }
-    });
 
-    ws.on('close', () => {
-        console.log(ws + ' closed');
-        currentClient.status = 'offline';
+        clients[username] = clientHandler;
 
         broadcastMessage(JSON.stringify({
-            type: 'user-status-change',
-            status: 'offline',
-            ...utils.formatClient(currentClient)
+            type: broadcastMessageType,
+            ...clientHandler.user
         }));
-    })
+    });
+
+    clientHandler.on('message', message => broadcastMessage(JSON.stringify(message)));
+
+    clientHandler.on('user-status-change', () => {
+        broadcastMessage(JSON.stringify({
+            type: 'user-status-change',
+            ...clientHandler.user
+        }));
+    });
+
+    clientHandler.on('close', () => {
+        broadcastMessage(JSON.stringify({
+            type: 'user-status-change',
+            ...clientHandler.user
+        }));
+    });
+
 };
 
 wss.on('connection', onConnect);
 
 
-app.get('/users', (req, res) => res.send([...clients].map(utils.formatClient)));
+app.get('/users', (req, res) => res.send(Object.values(clients).map(handler => handler.user)));
 
 app.get('/user/:username', (req, res) => {
-    const user = getUser(req.params.username);
+    const handler = clients[req.params.username];
 
-    if (user) {
-        res.send(user);
+    if (handler) {
+        res.send(handler.user);
     }
     else {
         res.status(404).send('User not found');
