@@ -1,8 +1,8 @@
 const ws = require('ws');
 const express = require('express');
 const cors = require('cors');
-const utils = require('./utils');
 
+const messageRouter = require('./messageRouter');
 const ClientHandler = require('./ClientHandler');
 
 const PORT = process.env.PORT || 8080;
@@ -16,14 +16,9 @@ const wss = new ws.Server({ server });
 
 const onConnect = (ws) => {
     const clientHandler = new ClientHandler(ws);
+    let currentUsername;
 
     console.log("New client: " + ws);
-
-    const broadcastMessage = (message) => {
-        cObject.entries(clients)
-            .filter(([username, handler]) => handler.isAvailable && username !== clientHandler.user.username)
-            .forEach(([, handler]) => handler.send(message));
-    };
 
     clientHandler.on('received-username', (username) => {
         let broadcastMessageType;
@@ -36,27 +31,28 @@ const onConnect = (ws) => {
         }
 
         clients[username] = clientHandler;
+        currentUsername = username;
 
-        broadcastMessage(JSON.stringify({
+        messageRouter.broadcast(clients, {
             type: broadcastMessageType,
             ...clientHandler.user
-        }));
+        }, username);
     });
 
-    clientHandler.on('message', message => broadcastMessage(JSON.stringify(message)));
+    clientHandler.on('message', message => messageRouter.route(clients, message));
 
     clientHandler.on('user-status-change', () => {
-        broadcastMessage(JSON.stringify({
+        messageRouter.broadcast(clients, {
             type: 'user-status-change',
             ...clientHandler.user
-        }));
+        }, currentUsername);
     });
 
     clientHandler.on('close', () => {
-        broadcastMessage(JSON.stringify({
+        messageRouter.broadcast(clients, {
             type: 'user-status-change',
             ...clientHandler.user
-        }));
+        }, currentUsername);
     });
 
 };

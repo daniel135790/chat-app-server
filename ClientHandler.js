@@ -74,7 +74,16 @@ class ClientHandler {
 
     send = (message) => {
         if (this.webSocket !== null) {
-            this.webSocket.send(message);
+            let finalMessage;
+
+            if (typeof (message) === 'object') {
+                finalMessage = JSON.stringify(message)
+            }
+            else {
+                finalMessage = message;
+            }
+
+            this.webSocket.send(finalMessage);
         }
     };
 
