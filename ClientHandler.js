@@ -2,13 +2,13 @@ const { v4: uuidv4 } = require('uuid');
 
 class ClientHandler {
     constructor(webSocket) {
+        this.webSocket = webSocket;
         this.callbacks = {};
         this.currentUser = {
             username: null,
             status: 'offline'
         };
 
-        this.webSocket = webSocket;
 
         webSocket.on('message', (rawMessage) => {
             const parsedMessage = JSON.parse(rawMessage);

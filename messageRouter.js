@@ -7,14 +7,21 @@ const broadcast = (clients, message, fromUser) => {
 const route = (clients, message) => {
     const { to, sender } = message;
     
-    if (!to) {
+    if (!to || to === 'global') {
         return broadcast(clients, message, sender);
     }
 
-    return clients[to].send({
-        ...message,
-        isPersonal: true
-    });
+    const targetClient = clients[to];
+    
+    if (targetClient) {
+        targetClient.send({
+            ...message,
+            isPersonal: true
+        });
+    }
+    else {
+        console.error('Target client not found: ' + to)
+    }
 };
 
 module.exports = {

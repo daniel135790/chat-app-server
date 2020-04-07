@@ -25,7 +25,6 @@ const onConnect = (ws) => {
 
         if (clients[username]) {
             broadcastMessageType = 'user-status-change';
-
         } else {
             broadcastMessageType = 'user-joined';
         }
@@ -40,7 +39,7 @@ const onConnect = (ws) => {
     });
 
     clientHandler.on('message', message => messageRouter.route(clients, message));
-
+    
     clientHandler.on('user-status-change', () => {
         messageRouter.broadcast(clients, {
             type: 'user-status-change',
